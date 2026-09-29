@@ -14,6 +14,7 @@ import androidx.core.content.IntentCompat
 import dev.jeonsi.blects.App
 import dev.jeonsi.blects.R
 import dev.jeonsi.blects.ble.BluetoothMonitor
+import dev.jeonsi.blects.ble.Bonder
 import dev.jeonsi.blects.ble.CtsGattServer
 import dev.jeonsi.blects.ble.DeviceLink
 import dev.jeonsi.blects.ble.TimeCodec
@@ -184,7 +185,9 @@ class TimeServerService : Service() {
 
         override fun onCurrentTimeRead(device: BluetoothDevice, sent: java.time.ZonedDateTime) {
             scope.launch {
-                repo.markSynced(device.address, System.currentTimeMillis())
+                val at = System.currentTimeMillis()
+                ServiceState.lastRead.update { it + (device.address to at) }
+                repo.markSynced(device.address, at)
                 repo.log(EventType.TIME_READ, device.address, "${Fmt.full(sent)} ${Fmt.zoneLabel(sent)}")
             }
         }
@@ -246,7 +249,8 @@ class TimeServerService : Service() {
             state == BluetoothDevice.BOND_BONDED -> repo.log(EventType.BOND, address, getString(R.string.detail_bonded))
             state == BluetoothDevice.BOND_BONDING -> repo.log(EventType.BOND, address, getString(R.string.detail_bonding))
             state == BluetoothDevice.BOND_NONE && previous == BluetoothDevice.BOND_BONDING -> {
-                repo.log(EventType.ERROR, address, getString(R.string.detail_pairing_failed))
+                val reason = intent.getIntExtra(Bonder.EXTRA_REASON, -1)
+                repo.log(EventType.ERROR, address, getString(R.string.detail_pairing_failed_reason, reason))
                 ServiceState.pairingFailed.value = address
             }
             state == BluetoothDevice.BOND_NONE -> repo.log(EventType.BOND, address, getString(R.string.detail_unbonded))

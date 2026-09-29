@@ -11,4 +11,10 @@ object ServiceState {
 
     /** 최근 페어링에 실패한 기기 주소. 기기 추가 시트가 힌트를 띄우는 데 쓴다. */
     val pairingFailed = MutableStateFlow<String?>(null)
+
+    /**
+     * 주소별 마지막 Current Time 읽기 시각. 등록 전(본딩 연결 중)에 읽어 간 것을
+     * 등록 직후 lastSyncAt 에 반영하기 위해 둔다.
+     */
+    val lastRead = MutableStateFlow<Map<String, Long>>(emptyMap())
 }

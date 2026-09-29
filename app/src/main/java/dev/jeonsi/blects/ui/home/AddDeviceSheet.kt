@@ -42,8 +42,9 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 
 /**
- * 기기 추가 바텀 시트. CTS 솔리시테이션을 광고하는 기기만 보여 주고, 탭하면 연결·페어링을 시작한다.
- * 페어링 대화상자는 시스템이 그린다. 첫 Current Time 읽기가 관찰되면 시트가 닫힌다.
+ * 기기 추가 바텀 시트. CTS 솔리시테이션을 광고하는 기기만 보여 주고, 탭하면 폰이 먼저 본딩한 뒤
+ * 연결을 건다(HomeViewModel.addDevice). 페어링 대화상자는 시스템이 그린다.
+ * 첫 Current Time 읽기가 관찰되면 시트가 닫힌다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,7 +88,7 @@ fun AddDeviceSheet(
     LaunchedEffect(connecting) {
         val target = connecting ?: return@LaunchedEffect
         ServiceState.pairingFailed.value = null
-        vm.addDevice(target.address, target.name)
+        if (!vm.addDevice(target.address, target.name)) return@LaunchedEffect
         vm.device(target.address).filterNotNull().first { it.lastSyncAt != null }
         onSynced(target.name ?: target.address)
     }

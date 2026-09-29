@@ -23,6 +23,10 @@ import java.util.concurrent.ConcurrentHashMap
  * - CTS (0x1805): Current Time (0x2A2B, read/notify + CCCD), Local Time Information (0x2A0F, read)
  * - ANCS 스텁: 아이폰용 액세서리가 구독을 시도하면 성공만 응답한다. 알림은 보내지 않는다.
  *
+ * 모든 읽기·쓰기는 아이폰과 똑같이 **암호화된(페어링된) 연결에서만** 허용한다. 암호화 없이도
+ * 읽게 두면 기기(ESP32)가 페어링이 끝나기 전에 시간을 읽고 ANCS까지 구독한 뒤 2초 만에 라디오를
+ * 꺼 버려, 폰의 페어링 대화상자가 링크 끊김으로 죽는다(실기기 확인, 2026-09-29).
+ *
  * 콜백은 바인더 스레드에서 온다. Listener 구현은 스레드를 신경 써야 한다.
  */
 @SuppressLint("MissingPermission")
@@ -103,14 +107,14 @@ class CtsGattServer(private val context: Context, private val listener: Listener
         currentTime = BluetoothGattCharacteristic(
             Uuids.CURRENT_TIME,
             BluetoothGattCharacteristic.PROPERTY_READ or BluetoothGattCharacteristic.PROPERTY_NOTIFY,
-            BluetoothGattCharacteristic.PERMISSION_READ,
+            BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED,
         ).apply { addDescriptor(cccd()) }
         svc.addCharacteristic(currentTime)
         svc.addCharacteristic(
             BluetoothGattCharacteristic(
                 Uuids.LOCAL_TIME_INFO,
                 BluetoothGattCharacteristic.PROPERTY_READ,
-                BluetoothGattCharacteristic.PERMISSION_READ,
+                BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED,
             )
         )
         return svc
@@ -123,7 +127,7 @@ class CtsGattServer(private val context: Context, private val listener: Listener
             BluetoothGattCharacteristic(
                 Uuids.ANCS_CONTROL_POINT,
                 BluetoothGattCharacteristic.PROPERTY_WRITE,
-                BluetoothGattCharacteristic.PERMISSION_WRITE,
+                BluetoothGattCharacteristic.PERMISSION_WRITE_ENCRYPTED,
             )
         )
         svc.addCharacteristic(notifyOnly(Uuids.ANCS_DATA_SOURCE))
@@ -136,7 +140,7 @@ class CtsGattServer(private val context: Context, private val listener: Listener
 
     private fun cccd() = BluetoothGattDescriptor(
         Uuids.CCCD,
-        BluetoothGattDescriptor.PERMISSION_READ or BluetoothGattDescriptor.PERMISSION_WRITE,
+        BluetoothGattDescriptor.PERMISSION_READ_ENCRYPTED or BluetoothGattDescriptor.PERMISSION_WRITE_ENCRYPTED,
     )
 
     private fun isSubscribed(device: BluetoothDevice, uuid: UUID) =

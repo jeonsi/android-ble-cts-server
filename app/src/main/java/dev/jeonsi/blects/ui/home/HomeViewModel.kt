@@ -6,7 +6,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.jeonsi.blects.App
+import dev.jeonsi.blects.R
+import dev.jeonsi.blects.ble.Bonder
 import dev.jeonsi.blects.data.Device
+import dev.jeonsi.blects.data.EventType
 import dev.jeonsi.blects.service.ServiceState
 import dev.jeonsi.blects.service.TimeServerService
 import dev.jeonsi.blects.ui.SystemStatus
@@ -131,11 +134,36 @@ class HomeViewModel(private val app: App) : ViewModel() {
         }
     }
 
-    /** 기기 추가 시트에서 탭. 서비스가 꺼져 있으면 같이 켠다. */
-    suspend fun addDevice(address: String, name: String?) {
-        repo.addDevice(address, name)
+    /**
+     * 기기 추가 시트에서 탭. 순서가 중요하다:
+     * 1. 서비스를 먼저 올린다 — 본딩 연결 위에서 기기가 곧바로 시간을 읽어 가므로 GATT 서버가 있어야 한다.
+     * 2. 폰이 명시적으로 본딩한다(`createBond`). 실패하면 등록하지 않는다.
+     * 3. 등록하고 링크를 건다. 본딩 중에 이미 읽어 갔으면 직접 연결 대신 자동 재연결로 걸어 둔다
+     *    (기기는 동기화 2초 뒤 라디오를 끄므로 직접 연결은 실패할 뿐이다).
+     *
+     * @return 본딩까지 성공해 등록됐으면 true
+     */
+    suspend fun addDevice(address: String, name: String?): Boolean {
         settings.setServiceEnabled(true)
-        TimeServerService.start(app, connectNow = address)
+        TimeServerService.start(app)
+        repo.log(EventType.BOND, address, app.getString(R.string.detail_bonding))
+        val result = Bonder.ensureBonded(app, address)
+        if (result != Bonder.Result.Bonded) {
+            val detail = when (result) {
+                Bonder.Result.Timeout -> app.getString(R.string.detail_pairing_timeout)
+                is Bonder.Result.Failed -> app.getString(R.string.detail_pairing_failed_reason, result.reason)
+                else -> app.getString(R.string.detail_pairing_failed)
+            }
+            repo.log(EventType.ERROR, address, detail)
+            ServiceState.pairingFailed.value = address
+            return false
+        }
+        repo.log(EventType.BOND, address, app.getString(R.string.detail_bonded))
+        repo.addDevice(address, name)
+        val readDuringBonding = ServiceState.lastRead.value[address]
+        if (readDuringBonding != null) repo.markSynced(address, readDuringBonding)
+        TimeServerService.start(app, connectNow = if (readDuringBonding == null) address else null)
+        return true
     }
 
     fun removeDevice(address: String) {

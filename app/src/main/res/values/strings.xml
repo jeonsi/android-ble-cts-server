@@ -62,7 +62,7 @@
     <string name="rssi_dbm">%1$d dBm</string>
     <string name="connecting_to">연결 중… %1$s</string>
     <string name="pairing_hint">페어링 대화상자가 뜨면 [페어링]을 누르세요.</string>
-    <string name="pairing_failed">페어링에 실패했습니다. 기기 쪽 페어링 정보를 지우고 다시 시도하세요. (폰을 바꿨다면 기기에 남은 이전 폰의 키가 원인입니다.)</string>
+    <string name="pairing_failed">페어링에 실패했습니다. 기기가 광고 중인지 확인하고 다시 시도하세요. 계속 실패하면 기기 쪽 페어링 정보를 지우세요. (폰을 바꿨다면 기기에 남은 이전 폰의 키가 원인입니다.)</string>
     <string name="retry">다시 시도</string>
     <string name="not_visible_title">기기가 안 보이면</string>
     <string name="not_visible_hint_1">· 기기를 광고 상태로 두세요.</string>
@@ -107,6 +107,8 @@
     <string name="detail_bonding">페어링 중</string>
     <string name="detail_unbonded">페어링 해제됨</string>
     <string name="detail_pairing_failed">페어링 실패</string>
+    <string name="detail_pairing_timeout">페어링 시간 초과 (90초)</string>
+    <string name="detail_pairing_failed_reason">페어링 실패 (사유 %1$d: 1 인증 실패 · 3 취소 · 4 상대 끊김 · 6 시간 초과 · 8 상대가 취소)</string>
     <string name="detail_time_changed">폰 시간 변경됨</string>
     <string name="detail_timezone_changed">시간대 변경됨: %1$s</string>
     <string name="detail_fgs_failed">포그라운드 서비스 시작 실패: %1$s</string>
