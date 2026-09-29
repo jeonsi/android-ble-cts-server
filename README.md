@@ -23,6 +23,35 @@ iOS는 BLE 액세서리와 페어링하면 OS가 CTS를 자동으로 제공하�
 
 - [사용성 설계](docs/usability.md) — 화면, 사용자 시나리오, 권한 순서, 백그라운드 생존이 사용자에게 보이는 방식
 
+## 빌드
+
+Android Studio 로 열거나, 터미널에서:
+
+```
+./gradlew :app:assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:testDebugUnitTest    # 시간 특성 인코딩 단위 테스트
+./gradlew :app:lintDebug
+```
+
+- Kotlin + Jetpack Compose(Material 3), 단일 `app` 모듈, 패키지 `dev.jeonsi.blects`
+- minSdk 29 / targetSdk 36 / compileSdk 37, AGP 9(내장 Kotlin), Room(KSP), DataStore
+- 실기기가 필요하다. BLE 는 에뮬레이터에서 동작하지 않는다.
+
+## 구조
+
+| 경로 | 역할 |
+|---|---|
+| `ble/CtsGattServer.kt` | CTS(0x1805) + ANCS 스텁 GATT 서버. Current Time / Local Time Information 인코딩은 `TimeCodec.kt` |
+| `ble/CtsScanner.kt` | 솔리시테이션 UUID 0x1805 필터 스캔 |
+| `ble/DeviceLink.kt` | 등록 기기별 `connectGatt(autoConnect)` 재연결 유지 |
+| `service/TimeServerService.kt` | foreground service(`connectedDevice`). 블루투스 on/off, 시간 변경, 본딩 상태를 로그로 남김 |
+| `service/BootReceiver.kt` | 부팅·앱 업데이트 후 자동 시작 |
+| `data/` | Room(기기 목록, 7일 이벤트 로그) + DataStore(설정) |
+| `ui/home` | 홈: 상태 배너, 서비스 스위치, 기기 카드, 기기 추가 바텀 시트 |
+| `ui/detail` | 기기 상세 로그, 내보내기, 제거 |
+| `ui/settings` | 자동 시작, 알림·배터리 설정 진입, 서빙 서비스 목록 |
+
 ## 상태
 
-초기 스캐폴딩 전 단계. 사용성 설계 완료, Android Studio 프로젝트 생성 예정.
+첫 구현 완료(빌드·단위 테스트·lint 통과). 실기기에서 esp32-c3-clock 과의 페어링·hourly 재연결 실측은
+아직이다. [사용성 설계](docs/usability.md)의 "미결 사항"(Doze 에서 autoConnect 가 붙는지)이 다음 단계다.
