@@ -53,5 +53,7 @@ Android Studio 로 열거나, 터미널에서:
 
 ## 상태
 
-첫 구현 완료(빌드·단위 테스트·lint 통과). 실기기에서 esp32-c3-clock 과의 페어링·hourly 재연결 실측은
-아직이다. [사용성 설계](docs/usability.md)의 "미결 사항"(Doze 에서 autoConnect 가 붙는지)이 다음 단계다.
+실기기(Galaxy S10e, Android 12)에서 esp32-c3-clock 과 페어링하고, 앱을 닫고 화면을 끈 채 밤새
+매시간 재동기화가 빠짐없이 되는 것을 확인했다. 페어링은 앱이 `createBond()`로 먼저 본딩하고 GATT 특성은
+모두 암호화 전용이어야 한다는 두 가지를 실측으로 배웠다 — [사용성 설계](docs/usability.md)의
+"기기 추가"와 "실측 결과" 참고. 남은 검증은 폰 재부팅 뒤 자동 시작이다.
