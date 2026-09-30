@@ -5,21 +5,65 @@ import android.os.Build
 import dev.jeonsi.blects.R
 import dev.jeonsi.blects.util.Fmt
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.ZonedDateTime
 
 class Repository(
     private val context: Context,
     db: AppDatabase,
+    private val bootState: BootState,
+    private val unlocked: StateFlow<Boolean>,
     private val scope: CoroutineScope,
 ) {
     private val devices = db.deviceDao()
     private val events = db.eventDao()
 
-    fun devices(): Flow<List<Device>> = devices.all()
+    /** 잠금 해제 전에 생긴 로그·동기화 기록. 해제되면 순서대로 DB 에 쓴다. */
+    private val lock = Mutex()
+    private val pendingEvents = ArrayList<Event>()
+    private val pendingSyncs = LinkedHashMap<String, Long>()
+    private var flushed = false
+
+    init {
+        scope.launch {
+            unlocked.first { it }
+            onUnlocked()
+        }
+    }
+
+    private suspend fun onUnlocked() {
+        lock.withLock {
+            for (e in pendingEvents) events.insert(e)
+            for ((address, at) in pendingSyncs) devices.markSynced(address, at)
+            pendingEvents.clear()
+            pendingSyncs.clear()
+            flushed = true
+        }
+        // 원본(Room) → 잠금 해제 전 저장소. 업데이트 전부터 등록돼 있던 기기도 여기서 옮겨진다.
+        devices.all().collect { bootState.setDevices(it) }
+    }
+
+    /** 잠금 해제 전에는 잠금 해제 전 저장소의 사본, 해제 뒤에는 Room. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun devices(): Flow<List<Device>> = unlocked.flatMapLatest { open ->
+        if (open) devices.all() else flowOf(bootState.devices())
+    }
+
     fun device(address: String): Flow<Device?> = devices.byAddress(address)
-    fun lastSyncAny(): Flow<Long?> = devices.lastSyncAny()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun lastSyncAny(): Flow<Long?> = unlocked.flatMapLatest { open ->
+        if (open) devices.lastSyncAny() else flowOf(bootState.devices().mapNotNull { it.lastSyncAt }.maxOrNull())
+    }
+
     fun events(address: String): Flow<List<Event>> = events.forDevice(address)
 
     suspend fun addDevice(address: String, name: String?) {
@@ -37,18 +81,39 @@ class Repository(
         logNow(EventType.DEVICE_REMOVED, address)
     }
 
-    suspend fun markSynced(address: String, at: Long) = devices.markSynced(address, at)
+    suspend fun markSynced(address: String, at: Long) {
+        bootState.markSynced(address, at)
+        lock.withLock {
+            if (!flushed) {
+                pendingSyncs[address] = at
+                return
+            }
+        }
+        devices.markSynced(address, at)
+    }
 
     /** 어디서든 부담 없이 호출하는 fire-and-forget 로그. */
     fun log(type: EventType, address: String? = null, detail: String? = null) {
-        scope.launch { logNow(type, address, detail) }
+        val e = Event(at = System.currentTimeMillis(), address = address, type = type, detail = detail)
+        scope.launch { insertOrHold(e) }
     }
 
     suspend fun logNow(type: EventType, address: String? = null, detail: String? = null) {
-        events.insert(Event(at = System.currentTimeMillis(), address = address, type = type, detail = detail))
+        insertOrHold(Event(at = System.currentTimeMillis(), address = address, type = type, detail = detail))
+    }
+
+    private suspend fun insertOrHold(e: Event) {
+        lock.withLock {
+            if (!flushed) {
+                pendingEvents += e
+                return
+            }
+        }
+        events.insert(e)
     }
 
     suspend fun pruneOldEvents() {
+        if (!unlocked.value) return
         events.prune(System.currentTimeMillis() - RETENTION_MS)
     }
 

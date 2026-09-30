@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -119,6 +120,22 @@ class HomeViewModel(private val app: App) : ViewModel() {
             batteryPromptDue = c.running && !c.batteryPromptDone && !sys.ignoringBatteryOptimizations &&
                 c.devices.any { it.lastSyncAt != null },
         )
+    }
+
+    /**
+     * 사용자가 켜 둔 서비스가 안 돌고 있으면 화면이 열릴 때 띄운다.
+     *
+     * 폰 재부팅 뒤 부팅 완료 신호는 잠금 해제 후에야 오고, 삼성 폰에서는 다른 앱들 뒤에 줄을 서서
+     * 몇 분 늦게 도착한다(실측: 부팅 뒤 4분 반). 그 사이 앱을 열면 스위치가 꺼짐으로 보이던 문제를
+     * 없앤다. 서비스가 다른 이유로 죽어 있을 때의 안전장치이기도 하다.
+     */
+    fun ensureServiceRunning() {
+        viewModelScope.launch {
+            if (ServiceState.running.value) return@launch
+            if (!settings.serviceEnabled.first()) return@launch
+            if (!SystemStatus.read(app).hasConnect) return@launch
+            TimeServerService.start(app)
+        }
     }
 
     fun refreshSystemStatus() {

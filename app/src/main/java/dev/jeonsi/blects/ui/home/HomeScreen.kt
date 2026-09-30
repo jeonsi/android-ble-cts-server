@@ -79,6 +79,7 @@ fun HomeScreen(
 
     LifecycleResumeEffect(Unit) {
         vm.refreshSystemStatus()
+        vm.ensureServiceRunning()
         onPauseOrDispose { }
     }
 
